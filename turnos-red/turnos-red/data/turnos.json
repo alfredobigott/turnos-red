@@ -1,0 +1,65 @@
+[
+  {
+    "id": "102",
+    "paciente": "  Carlos Ruiz  ",
+    "documento": 31654210,
+    "especialidad": "PEDIATRÍA",
+    "fecha": "14/08/2026",
+    "hora": "10.00",
+    "confirmado": "si"
+  },
+  {
+    "id": 103,
+    "paciente": "Ana Gómez",
+    "documento": "40221187",
+    "especialidad": "Clínica Médica",
+    "fecha": "15/08/2026",
+    "hora": "9:30",
+    "confirmado": true
+  },
+  {
+    "id": "104",
+    "paciente": "Marcos Peña",
+    "documento": 38112233,
+    "especialidad": "Odontología",
+    "fecha": "15/08/2026",
+    "hora": "11.30",
+    "confirmado": "no"
+  },
+  {
+    "id": "105",
+    "paciente": "Lucía Fernández",
+    "documento": 41556677,
+    "especialidad": "Nutrición",
+    "fecha": "16/08/2026",
+    "hora": "14.00",
+    "confirmado": 1
+  },
+  {
+    "id": "abc",
+    "paciente": "Registro inválido: id no numérico",
+    "documento": 12345678,
+    "especialidad": "Pediatría",
+    "fecha": "16/08/2026",
+    "hora": "10.00",
+    "confirmado": "si"
+  },
+  {
+    "id": "106",
+    "paciente": "",
+    "documento": 99887766,
+    "especialidad": "Clínica Médica",
+    "fecha": "17/08/2026",
+    "hora": "10.00",
+    "confirmado": "no"
+  },
+  {
+    "id": "-3",
+    "paciente": "Registro inválido: id negativo",
+    "documento": 11223344,
+    "especialidad": "Odontología",
+    "fecha": "17/08/2026",
+    "hora": "12.00",
+    "confirmado": "si"
+  }
+]

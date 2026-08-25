@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <title>TurnosRed – Cliente de prueba Socket.IO</title>
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        max-width: 640px;
+        margin: 2rem auto;
+        padding: 0 1rem;
+      }
+      #estado {
+        font-weight: bold;
+      }
+      li {
+        margin-bottom: 0.4rem;
+        font-family: monospace;
+        font-size: 0.9rem;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>TurnosRed – eventos en tiempo real</h1>
+    <p>Estado: <span id="estado">conectando…</span></p>
+    <p>
+      Dejá esta página abierta y hacé un POST/PUT/DELETE a <code>/turnos</code> desde Postman en
+      otra pestaña. Los eventos van a aparecer acá abajo solos, sin recargar.
+    </p>
+    <ul id="log"></ul>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+      const socket = io();
+      const estado = document.getElementById("estado");
+      const log = document.getElementById("log");
+
+      socket.on("connect", () => {
+        estado.textContent = "conectado (" + socket.id + ")";
+      });
+
+      socket.on("disconnect", () => {
+        estado.textContent = "desconectado";
+      });
+
+      function agregarEvento(nombre, datos) {
+        const li = document.createElement("li");
+        const hora = new Date().toLocaleTimeString();
+        li.textContent = "[" + hora + "] " + nombre + ": " + JSON.stringify(datos);
+        log.prepend(li);
+      }
+
+      socket.on("turno:nuevo", (turno) => agregarEvento("turno:nuevo", turno));
+      socket.on("turno:actualizado", (turno) => agregarEvento("turno:actualizado", turno));
+      socket.on("turno:eliminado", (turno) => agregarEvento("turno:eliminado", turno));
+    </script>
+  </body>
+</html>
