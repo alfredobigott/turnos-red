@@ -24,8 +24,19 @@ export async function inicializarTurnos(rutaArchivo: string): Promise<void> {
   turnos = normalizarTurnos(crudos);
 }
 
-export function obtenerTodos(): Turno[] {
-  return turnos;
+export interface FiltrosTurnos {
+  especialidad?: string;
+  fecha?: string;
+  medicoId?: number;
+}
+
+export function obtenerTodos(filtros: FiltrosTurnos = {}): Turno[] {
+  return turnos.filter((turno) => {
+    if (filtros.especialidad && turno.especialidad !== filtros.especialidad) return false;
+    if (filtros.fecha && turno.fecha !== filtros.fecha) return false;
+    if (filtros.medicoId !== undefined && turno.medicoId !== filtros.medicoId) return false;
+    return true;
+  });
 }
 
 export function obtenerPorId(id: number): Turno | undefined {

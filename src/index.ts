@@ -1,21 +1,21 @@
 import "dotenv/config";
 import express from "express";
-import type { NextFunction, Request, Response } from "express";
 import { createServer } from "node:http";
 import { Server } from "socket.io";
 import turnosRoutes from "./routes/turnos.routes.js";
+import medicosRoutes from "./routes/medicos.routes.js";
 import { eventosTurnos, inicializarTurnos } from "./services/turnos.service.js";
+import { inicializarMedicos } from "./services/medicos.service.js";
+import { errorHandler } from "./middleware/errorHandler.js";
 
 const app = express();
 app.use(express.json());
 app.use(express.static("public"));
 app.use("/turnos", turnosRoutes);
+app.use("/medicos", medicosRoutes);
 
 // Middleware de manejo de errores: siempre al final, siempre 4 parámetros.
-app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
-  console.error(err);
-  res.status(500).json({ error: "Error interno del servidor." });
-});
+app.use(errorHandler);
 
 const httpServer = createServer(app);
 const io = new Server(httpServer, { cors: { origin: "*" } });
@@ -32,9 +32,10 @@ io.on("connection", (socket) => {
 });
 
 const PUERTO = Number(process.env.PORT) || 3000;
-const RUTA_DATOS = process.env.DATA_FILE_PATH ?? "./data/turnos.json";
+const RUTA_DATOS_TURNOS = process.env.DATA_FILE_PATH ?? "./data/turnos.json";
+const RUTA_DATOS_MEDICOS = process.env.MEDICOS_DATA_FILE_PATH ?? "./data/medicos.json";
 
-inicializarTurnos(RUTA_DATOS)
+Promise.all([inicializarTurnos(RUTA_DATOS_TURNOS), inicializarMedicos(RUTA_DATOS_MEDICOS)])
   .then(() => {
     httpServer.listen(PUERTO, () => {
       console.log(`Servidor escuchando en http://localhost:${PUERTO}`);

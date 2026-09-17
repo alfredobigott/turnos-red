@@ -1,0 +1,37 @@
+[
+  {
+    "id": 1,
+    "nombre": "Dra. Silvina Torres",
+    "especialidad": "Clínica médica",
+    "matricula": "MP-10234",
+    "disponible": true
+  },
+  {
+    "id": 2,
+    "nombre": "Dr. Federico Álvarez",
+    "especialidad": "Pediatría",
+    "matricula": "MP-11897",
+    "disponible": true
+  },
+  {
+    "id": 3,
+    "nombre": "Dra. Carla Domínguez",
+    "especialidad": "Odontología",
+    "matricula": "MP-13456",
+    "disponible": false
+  },
+  {
+    "id": 4,
+    "nombre": "Dr. Nicolás Suárez",
+    "especialidad": "Nutrición",
+    "matricula": "MP-14721",
+    "disponible": true
+  },
+  {
+    "id": 5,
+    "nombre": "Dra. Paula Ibáñez",
+    "especialidad": "Clínica médica",
+    "matricula": "MP-15980",
+    "disponible": false
+  }
+]

@@ -1,3 +1,8 @@
+// Enum cerrado de especialidades soportadas por la red de centros.
+export const ESPECIALIDADES = ["Clínica médica", "Pediatría", "Odontología", "Nutrición"] as const;
+
+export type Especialidad = (typeof ESPECIALIDADES)[number];
+
 // Forma heterogénea en la que puede llegar un registro desde el JSON de
 // origen. Todo es opcional y de tipos permisivos porque cada sede envía
 // sus datos con formatos distintos: no hay ninguna garantía todavía.
@@ -9,6 +14,7 @@ export interface TurnoCrudo {
   fecha?: string;
   hora?: string;
   confirmado?: string | boolean | number;
+  medicoId?: string | number;
 }
 
 // Forma limpia y confiable que usa el resto de la aplicación.
@@ -21,6 +27,7 @@ export interface Turno {
   hora: string; // normalizado a HH:mm
   confirmado: boolean;
   observaciones?: string;
+  medicoId?: number;
 }
 
 function normalizarId(valor: unknown): number | null {
@@ -45,6 +52,17 @@ function normalizarHora(valor: unknown): string | null {
   return `${horas.padStart(2, "0")}:${minutos}`;
 }
 
+// Cada sede puede mandar la especialidad con mayúsculas/acentos distintos
+// (p. ej. "PEDIATRÍA"). Si coincide (ignorando mayúsculas y acentos) con
+// alguno de los valores del enum cerrado, se canoniza a esa forma; si no
+// coincide con ninguno, se conserva el valor recortado tal cual llegó.
+function normalizarEspecialidad(valor: string): string {
+  const coincidencia = ESPECIALIDADES.find(
+    (especialidad) => especialidad.localeCompare(valor, undefined, { sensitivity: "base" }) === 0,
+  );
+  return coincidencia ?? valor;
+}
+
 function normalizarConfirmado(valor: unknown): boolean {
   if (typeof valor === "boolean") return valor;
   if (typeof valor === "number") return valor === 1;
@@ -66,8 +84,9 @@ export function normalizarTurno(crudo: TurnoCrudo): Turno | null {
   const documento = crudo.documento !== undefined ? String(crudo.documento).trim() : "";
   if (documento === "") return null;
 
-  const especialidad = typeof crudo.especialidad === "string" ? crudo.especialidad.trim() : "";
-  if (especialidad === "") return null;
+  const especialidadCruda = typeof crudo.especialidad === "string" ? crudo.especialidad.trim() : "";
+  if (especialidadCruda === "") return null;
+  const especialidad = normalizarEspecialidad(especialidadCruda);
 
   const fecha = normalizarFecha(crudo.fecha);
   if (fecha === null) return null;
@@ -77,7 +96,11 @@ export function normalizarTurno(crudo: TurnoCrudo): Turno | null {
 
   const confirmado = normalizarConfirmado(crudo.confirmado);
 
-  return { id, paciente, documento, especialidad, fecha, hora, confirmado };
+  const turno: Turno = { id, paciente, documento, especialidad, fecha, hora, confirmado };
+  const medicoId = normalizarId(crudo.medicoId);
+  if (medicoId !== null) turno.medicoId = medicoId;
+
+  return turno;
 }
 
 // Procesa un array completo, separando válidos de inválidos e informando
