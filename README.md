@@ -201,7 +201,8 @@ Socket.IO.
 ## Uso de Inteligencia Artificial
 
 | Tarea | Herramienta | Prompt | Respuesta generada | Ajuste manual aplicado |
-| ----- | ----------- | ------ | -------------------- | ------------------------ |
-|       |             |        |                       |                           |
-|       |             |        |                       |                           |
-|       |             |        |                       |                           |
+|---|---|---|---|---|
+| Middleware de errores + códigos HTTP estrictos | Claude Code | "Middleware centralizado de manejo de errores... /turnos debe responder 200/201/204/400/404/500 (DELETE pasa a 204)..." | Clase `AppError` (status/code/details), helper `parseIdParam`, refactor de los 5 controllers de Turno | Se verificó con pruebas manuales (curl/node fetch) que cada código de estado fuera el esperado antes de aceptar el cambio |
+| Validación con Zod (Turno y Médico) | Claude Code | "Especialidad restringida a estos 4 valores exactos, tratalos como enum cerrado... 400 con el campo exacto que falló" | `turno.schema.ts` y `medico.schema.ts`, middleware de validación integrado con el formato de error estándar | Se confirmó que "Pediatria" (sin tilde) fallara y "Pediatría" pasara, ya que la consigna pedía un enum cerrado, no Title Case genérico |
+| Colección de Postman con tests automáticos | Claude Code | "Generá la colección completa... con scripts pm.test... casos de especialidad inválida (400) y de id inexistente (404)" | `turnos-red.postman_collection.json` y el environment, con 12 requests y 24 tests | Hubo que regenerar los archivos una segunda vez porque la función "Work locally with Git" de Postman los convirtió a otro formato sin querer; también se corrigieron a mano los ids fijos (`turnoId`, `medicoId`) del entorno para que coincidieran con datos reales antes de correr el Collection Runner |
+| Documentación del proyecto (CLAUDE.md y README) | Claude Code | `/init`, y luego "Actualizá README.md con requisitos, variables de entorno, estructura de carpetas y endpoints" | `CLAUDE.md` con la arquitectura completa, y README actualizado | Se le pidió regenerar `CLAUDE.md` una segunda vez para que reflejara los cambios de esta actividad (Zod, Médicos, filtros), en vez de quedar desactualizado |
