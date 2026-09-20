@@ -83,6 +83,7 @@ turnos-red/
 │   │   ├── medicos.service.ts      # Lectura de datos, estado en memoria, CRUD, filtros
 │   │   └── ejemplo-callbacks.ts    # Ejemplo comparativo con callbacks (solo referencia)
 │   ├── controllers/
+│   │   ├── general.controller.ts   # GET "/" (bienvenida) y notFound (catch-all 404)
 │   │   ├── turnos.controller.ts    # Maneja req/res y códigos de estado HTTP de /turnos
 │   │   └── medicos.controller.ts   # Maneja req/res y códigos de estado HTTP de /medicos
 │   ├── routes/
@@ -92,7 +93,7 @@ turnos-red/
 │   │   ├── errorHandler.ts         # AppError + middleware de manejo de errores centralizado
 │   │   └── validateBody.ts         # Middleware genérico de validación de body con Zod
 │   └── utils/
-│       └── parseIdParam.ts         # Helper compartido para parsear/validar :id
+│       └── parseIdParam.ts         # Helper para parsear/validar :id (sin uso actual, ver Manejo de errores)
 ├── dist/                            # Salida compilada (generada, no se versiona)
 ├── .env.example                     # Plantilla de variables de entorno
 ├── .nvmrc                           # Versión de Node del proyecto
@@ -106,11 +107,19 @@ un middleware de **schemas** (Zod) valida el body en POST/PUT antes de llegar al
 lógica real (datos, normalización, filtros, eventos), y **models** define las formas de los
 datos.
 
+Las 5 funciones de `turnos.controller.ts` y las 5 de `medicos.controller.ts` siguen todas el
+mismo patrón interno: son `async`, declaran al principio `let status = <código de éxito>`
+(`200` para GET/PUT, `201` para POST, `204` para DELETE) y envuelven toda la lógica en un único
+`try/catch` propio de la función. Cada validación (`:id` no numérico, campos obligatorios
+faltantes en el body, recurso inexistente, query param inválido) reasigna `status` — y un
+`code` en paralelo — justo antes de hacer `throw new Error("mensaje")`, y el propio `catch`
+arma la respuesta con esa misma variable `status`, `error.message` y `code`. Ningún controller
+llama `next(error)` ni lanza `AppError`; ver la sección **Manejo de errores** para el detalle.
+
 ## Manejo de errores
 
-Todos los errores de la API (los que vienen de un `AppError` explícito y cualquier error
-inesperado) pasan por un único middleware (`src/middleware/errorHandler.ts`) que responde
-siempre con el mismo formato:
+Todos los errores de la API responden con el mismo formato, pero ya no salen todos del mismo
+lugar: hay tres caminos distintos según dónde se detecta el error.
 
 ```json
 {
@@ -124,13 +133,54 @@ siempre con el mismo formato:
 - `status`: código HTTP de la respuesta.
 - `message`: descripción legible del error.
 - `code`: identificador corto y estable del tipo de error (p. ej. `VALIDATION_ERROR`,
-  `TURNO_NOT_FOUND`, `MEDICO_NOT_FOUND`, `INVALID_ID`, `INVALID_QUERY_PARAM`,
-  `INTERNAL_ERROR`).
-- `details`: array con información adicional. En errores de validación de Zod, son los
-  `issues` devueltos por la librería (incluyen el campo exacto que falló en `path`).
+  `MISSING_FIELDS`, `TURNO_NOT_FOUND`, `MEDICO_NOT_FOUND`, `INVALID_ID`,
+  `INVALID_QUERY_PARAM`, `ROUTE_NOT_FOUND`, `INTERNAL_ERROR`).
+- `details`: array con información adicional. Hoy solo lo llena la validación de Zod (ver
+  abajo); en cualquier otro caso queda en `[]`.
+
+### 1. Dentro de cada controller (`turnos.controller.ts`, `medicos.controller.ts`)
+
+Las 5 funciones de cada controller ya no delegan sus errores esperables a un middleware
+central: cada una tiene su propio `try/catch`, con `status` y `code` declarados como `let` al
+principio de la función y reasignados justo antes de cada `throw new Error("mensaje")`
+(id inválido, campos obligatorios faltantes, recurso no encontrado, query param inválido). El
+`catch` de esa misma función arma la respuesta a mano con `res.status(status).json({ status,
+message: error.message, code, details: [] })` — no hay clases de error custom ni `next(error)`
+en este camino. `errorHandler.ts` no interviene acá salvo que algo realmente inesperado escape
+del `try/catch` (por ejemplo, una excepción no prevista lanzada por la capa de servicios), en
+cuyo caso sí llegaría como error 500 sin manejar — pero eso ya no es el flujo normal.
+
+### 2. Validación de body en POST/PUT (`src/middleware/validateBody.ts`)
+
+Este middleware corre *antes* de que la petición llegue al controller (ver `*.routes.ts`) y
+sigue el esquema anterior: si el body no matchea el schema de Zod, arma un `AppError(400, ...,
+"VALIDATION_ERROR", error.issues)` y llama a `next(error)`, que termina en el middleware
+centralizado `src/middleware/errorHandler.ts` (mounted al final de `index.ts`, después de
+`/turnos` y `/medicos`). Ahí es donde `details` se completa con los `issues` de Zod (incluyen
+el campo exacto que falló en `path`).
+
+### 3. Rutas no definidas (`src/controllers/general.controller.ts`)
+
+`GET /` responde `{ "mensaje": "API de TurnosRed funcionando" }` con `200`. Cualquier
+método/ruta que no matchee ni `/turnos`, ni `/medicos`, ni `/` cae en `notFound`, registrado
+como el último `app.use()` de `index.ts` (después de ambos routers, antes de `errorHandler`),
+que responde directamente `404` con `code: "ROUTE_NOT_FOUND"` y `message: "Ruta no encontrada:
+<método> <url>"` — tampoco pasa por `errorHandler`.
+
+`src/utils/parseIdParam.ts` (que lanzaba `AppError` para un `:id` no numérico) quedó sin uso:
+turnos y médicos ahora validan el `:id` en línea dentro de su propio `try/catch`, para poder
+setear `status`/`code` antes del `throw new Error(...)` sin depender de una clase de error
+ajena a ese patrón.
 
 Los endpoints de `/turnos` y `/medicos` responden únicamente con los códigos `200`, `201`,
 `204`, `400`, `404` o `500`.
+
+## Endpoint general
+
+| Método   | Ruta   | Descripción                                  | Códigos de estado |
+| -------- | ------ | ----------------------------------------------- | -------------------- |
+| `GET`    | `/`    | Mensaje de bienvenida de la API                | `200`                 |
+| `*`      | `*`    | Cualquier ruta/método no definido (catch-all)  | `404`                 |
 
 ## Endpoints de `/turnos`
 

@@ -1,10 +1,10 @@
-import type { NextFunction, Request, Response } from "express";
+import type { Request, Response } from "express";
 import * as medicosService from "../services/medicos.service.js";
 import type { FiltrosMedicos } from "../services/medicos.service.js";
-import { AppError } from "../middleware/errorHandler.js";
-import { parseIdParam } from "../utils/parseIdParam.js";
 
-export function listarMedicos(req: Request, res: Response, next: NextFunction): void {
+export async function listarMedicos(req: Request, res: Response): Promise<Response> {
+  let status = 200;
+  let code = "INTERNAL_ERROR";
   try {
     const { especialidad, disponible } = req.query;
     const filtros: FiltrosMedicos = {};
@@ -15,62 +15,132 @@ export function listarMedicos(req: Request, res: Response, next: NextFunction): 
 
     if (typeof disponible === "string" && disponible.trim() !== "") {
       if (disponible !== "true" && disponible !== "false") {
-        throw new AppError(400, "disponible debe ser 'true' o 'false'.", "INVALID_QUERY_PARAM");
+        status = 400;
+        code = "INVALID_QUERY_PARAM";
+        throw new Error("disponible debe ser 'true' o 'false'.");
       }
       filtros.disponible = disponible === "true";
     }
 
-    res.status(200).json(medicosService.obtenerTodos(filtros));
+    return res.status(status).json(medicosService.obtenerTodos(filtros));
   } catch (error) {
-    next(error);
+    return res.status(status).json({
+      status,
+      message: (error as Error).message,
+      code,
+      details: [],
+    });
   }
 }
 
-export function obtenerMedico(req: Request, res: Response, next: NextFunction): void {
+export async function obtenerMedico(req: Request, res: Response): Promise<Response> {
+  let status = 200;
+  let code = "INTERNAL_ERROR";
   try {
-    const id = parseIdParam(req.params.id);
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) {
+      status = 400;
+      code = "INVALID_ID";
+      throw new Error("El id debe ser un número entero.");
+    }
+
     const medico = medicosService.obtenerPorId(id);
     if (!medico) {
-      throw new AppError(404, "Médico no encontrado.", "MEDICO_NOT_FOUND");
+      status = 404;
+      code = "MEDICO_NOT_FOUND";
+      throw new Error("Médico no encontrado.");
     }
-    res.status(200).json(medico);
+
+    return res.status(status).json(medico);
   } catch (error) {
-    next(error);
+    return res.status(status).json({
+      status,
+      message: (error as Error).message,
+      code,
+      details: [],
+    });
   }
 }
 
-export function crearMedico(req: Request, res: Response, next: NextFunction): void {
+export async function crearMedico(req: Request, res: Response): Promise<Response> {
+  let status = 201;
+  let code = "INTERNAL_ERROR";
   try {
     const { nombre, especialidad, matricula, disponible } = req.body;
+
+    if (!nombre || !especialidad || !matricula) {
+      status = 400;
+      code = "MISSING_FIELDS";
+      throw new Error("Faltan campos obligatorios.");
+    }
+
     const nuevo = medicosService.crear({ nombre, especialidad, matricula, disponible });
-    res.status(201).json(nuevo);
+
+    return res.status(status).json(nuevo);
   } catch (error) {
-    next(error);
+    return res.status(status).json({
+      status,
+      message: (error as Error).message,
+      code,
+      details: [],
+    });
   }
 }
 
-export function actualizarMedico(req: Request, res: Response, next: NextFunction): void {
+export async function actualizarMedico(req: Request, res: Response): Promise<Response> {
+  let status = 200;
+  let code = "INTERNAL_ERROR";
   try {
-    const id = parseIdParam(req.params.id);
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) {
+      status = 400;
+      code = "INVALID_ID";
+      throw new Error("El id debe ser un número entero.");
+    }
+
     const actualizado = medicosService.actualizar(id, req.body);
     if (!actualizado) {
-      throw new AppError(404, "Médico no encontrado.", "MEDICO_NOT_FOUND");
+      status = 404;
+      code = "MEDICO_NOT_FOUND";
+      throw new Error("Médico no encontrado.");
     }
-    res.status(200).json(actualizado);
+
+    return res.status(status).json(actualizado);
   } catch (error) {
-    next(error);
+    return res.status(status).json({
+      status,
+      message: (error as Error).message,
+      code,
+      details: [],
+    });
   }
 }
 
-export function eliminarMedico(req: Request, res: Response, next: NextFunction): void {
+export async function eliminarMedico(req: Request, res: Response): Promise<Response> {
+  let status = 204;
+  let code = "INTERNAL_ERROR";
   try {
-    const id = parseIdParam(req.params.id);
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) {
+      status = 400;
+      code = "INVALID_ID";
+      throw new Error("El id debe ser un número entero.");
+    }
+
     const eliminado = medicosService.eliminar(id);
     if (!eliminado) {
-      throw new AppError(404, "Médico no encontrado.", "MEDICO_NOT_FOUND");
+      status = 404;
+      code = "MEDICO_NOT_FOUND";
+      throw new Error("Médico no encontrado.");
     }
-    res.status(204).send();
+
+    return res.status(status).send();
   } catch (error) {
-    next(error);
+    return res.status(status).json({
+      status,
+      message: (error as Error).message,
+      code,
+      details: [],
+    });
   }
 }

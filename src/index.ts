@@ -7,12 +7,17 @@ import medicosRoutes from "./routes/medicos.routes.js";
 import { eventosTurnos, inicializarTurnos } from "./services/turnos.service.js";
 import { inicializarMedicos } from "./services/medicos.service.js";
 import { errorHandler } from "./middleware/errorHandler.js";
+import { helloWorld, notFound } from "./controllers/general.controller.js";
 
 const app = express();
 app.use(express.json());
 app.use(express.static("public"));
+app.get("/", helloWorld);
 app.use("/turnos", turnosRoutes);
 app.use("/medicos", medicosRoutes);
+
+// Rutas no definidas: después de /turnos y /medicos, antes del errorHandler.
+app.use(notFound);
 
 // Middleware de manejo de errores: siempre al final, siempre 4 parámetros.
 app.use(errorHandler);

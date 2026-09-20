@@ -1,10 +1,10 @@
-import type { NextFunction, Request, Response } from "express";
+import type { Request, Response } from "express";
 import * as turnosService from "../services/turnos.service.js";
 import type { FiltrosTurnos } from "../services/turnos.service.js";
-import { AppError } from "../middleware/errorHandler.js";
-import { parseIdParam } from "../utils/parseIdParam.js";
 
-export function listarTurnos(req: Request, res: Response, next: NextFunction): void {
+export async function listarTurnos(req: Request, res: Response): Promise<Response> {
+  let status = 200;
+  let code = "INTERNAL_ERROR";
   try {
     const { especialidad, fecha, medicoId } = req.query;
     const filtros: FiltrosTurnos = {};
@@ -20,34 +20,65 @@ export function listarTurnos(req: Request, res: Response, next: NextFunction): v
     if (typeof medicoId === "string" && medicoId.trim() !== "") {
       const medicoIdNumero = Number(medicoId);
       if (!Number.isInteger(medicoIdNumero)) {
-        throw new AppError(400, "medicoId debe ser un número entero.", "INVALID_QUERY_PARAM");
+        status = 400;
+        code = "INVALID_QUERY_PARAM";
+        throw new Error("medicoId debe ser un número entero.");
       }
       filtros.medicoId = medicoIdNumero;
     }
 
-    res.status(200).json(turnosService.obtenerTodos(filtros));
+    return res.status(status).json(turnosService.obtenerTodos(filtros));
   } catch (error) {
-    next(error);
+    return res.status(status).json({
+      status,
+      message: (error as Error).message,
+      code,
+      details: [],
+    });
   }
 }
 
-export function obtenerTurno(req: Request, res: Response, next: NextFunction): void {
+export async function obtenerTurno(req: Request, res: Response): Promise<Response> {
+  let status = 200;
+  let code = "INTERNAL_ERROR";
   try {
-    const id = parseIdParam(req.params.id);
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) {
+      status = 400;
+      code = "INVALID_ID";
+      throw new Error("El id debe ser un número entero.");
+    }
+
     const turno = turnosService.obtenerPorId(id);
     if (!turno) {
-      throw new AppError(404, "Turno no encontrado.", "TURNO_NOT_FOUND");
+      status = 404;
+      code = "TURNO_NOT_FOUND";
+      throw new Error("Turno no encontrado.");
     }
-    res.status(200).json(turno);
+
+    return res.status(status).json(turno);
   } catch (error) {
-    next(error);
+    return res.status(status).json({
+      status,
+      message: (error as Error).message,
+      code,
+      details: [],
+    });
   }
 }
 
-export function crearTurno(req: Request, res: Response, next: NextFunction): void {
+export async function crearTurno(req: Request, res: Response): Promise<Response> {
+  let status = 201;
+  let code = "INTERNAL_ERROR";
   try {
     const { paciente, documento, especialidad, fecha, hora, confirmado, observaciones, medicoId } =
       req.body;
+
+    if (!paciente || !documento || !especialidad || !fecha || !hora) {
+      status = 400;
+      code = "MISSING_FIELDS";
+      throw new Error("Faltan campos obligatorios.");
+    }
 
     const nuevo = turnosService.crear({
       paciente,
@@ -60,34 +91,71 @@ export function crearTurno(req: Request, res: Response, next: NextFunction): voi
       medicoId,
     });
 
-    res.status(201).json(nuevo);
+    return res.status(status).json(nuevo);
   } catch (error) {
-    next(error);
+    return res.status(status).json({
+      status,
+      message: (error as Error).message,
+      code,
+      details: [],
+    });
   }
 }
 
-export function actualizarTurno(req: Request, res: Response, next: NextFunction): void {
+export async function actualizarTurno(req: Request, res: Response): Promise<Response> {
+  let status = 200;
+  let code = "INTERNAL_ERROR";
   try {
-    const id = parseIdParam(req.params.id);
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) {
+      status = 400;
+      code = "INVALID_ID";
+      throw new Error("El id debe ser un número entero.");
+    }
+
     const actualizado = turnosService.actualizar(id, req.body);
     if (!actualizado) {
-      throw new AppError(404, "Turno no encontrado.", "TURNO_NOT_FOUND");
+      status = 404;
+      code = "TURNO_NOT_FOUND";
+      throw new Error("Turno no encontrado.");
     }
-    res.status(200).json(actualizado);
+
+    return res.status(status).json(actualizado);
   } catch (error) {
-    next(error);
+    return res.status(status).json({
+      status,
+      message: (error as Error).message,
+      code,
+      details: [],
+    });
   }
 }
 
-export function eliminarTurno(req: Request, res: Response, next: NextFunction): void {
+export async function eliminarTurno(req: Request, res: Response): Promise<Response> {
+  let status = 204;
+  let code = "INTERNAL_ERROR";
   try {
-    const id = parseIdParam(req.params.id);
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) {
+      status = 400;
+      code = "INVALID_ID";
+      throw new Error("El id debe ser un número entero.");
+    }
+
     const eliminado = turnosService.eliminar(id);
     if (!eliminado) {
-      throw new AppError(404, "Turno no encontrado.", "TURNO_NOT_FOUND");
+      status = 404;
+      code = "TURNO_NOT_FOUND";
+      throw new Error("Turno no encontrado.");
     }
-    res.status(204).send();
+
+    return res.status(status).send();
   } catch (error) {
-    next(error);
+    return res.status(status).json({
+      status,
+      message: (error as Error).message,
+      code,
+      details: [],
+    });
   }
 }
