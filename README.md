@@ -30,16 +30,24 @@ npm install
 # 4. Crear el archivo de variables de entorno a partir del ejemplo
 cp .env.example .env
 
-# 5. Compilar TypeScript -> JavaScript
-npm run build
-
-# 6. Levantar el servidor
-npm start
+# 5. Levantar el servidor en modo desarrollo (compila y arranca en un solo paso)
+npm run dev
 ```
 
 El servidor queda escuchando en `http://localhost:3000` (o el puerto que definas en `.env`).
 Un cliente de prueba de Socket.IO queda disponible en `http://localhost:3000/socket-test.html`
 para ver los eventos de turnos en tiempo real sin usar Postman.
+
+### Ejecución en desarrollo
+
+`npm run dev` es el comando pensado para el día a día: compila TypeScript con `tsc` y a
+continuación arranca el servidor ya compilado (`node dist/index.js`), en un solo paso. Repetirlo
+después de cada cambio en `src/**/*.ts` recompila y reinicia el servidor con el código
+actualizado.
+
+Si preferís separar los pasos (por ejemplo, para levantar el servidor varias veces sin
+recompilar), podés usar `npm run build` seguido de `npm start` — son los mismos dos pasos que
+ejecuta `npm run dev`, pero por separado.
 
 ## Variables de entorno
 
@@ -56,6 +64,7 @@ repositorio (está en `.gitignore`); `.env.example` sí, como plantilla.
 
 | Script           | Comando                  | Qué hace                                                              |
 | ----------------- | ------------------------- | ------------------------------------------------------------------------ |
+| `npm run dev`    | `tsc && node dist/index.js` | Comando de arranque en desarrollo: compila y levanta el servidor en un solo paso. |
 | `npm run build`  | `tsc`                    | Compila `src/**/*.ts` a JavaScript en `dist/`, usando `tsconfig.json`.  |
 | `npm start`      | `node dist/index.js`     | Corre el servidor ya compilado. Requiere haber corrido `build` antes.   |
 | `npm run lint`   | `eslint . --ext .ts`     | Revisa el código fuente en busca de errores y malas prácticas.          |
@@ -175,61 +184,187 @@ ajena a ese patrón.
 Los endpoints de `/turnos` y `/medicos` responden únicamente con los códigos `200`, `201`,
 `204`, `400`, `404` o `500`.
 
-## Endpoint general
+## Endpoints de la API
 
-| Método   | Ruta   | Descripción                                  | Códigos de estado |
-| -------- | ------ | ----------------------------------------------- | -------------------- |
-| `GET`    | `/`    | Mensaje de bienvenida de la API                | `200`                 |
-| `*`      | `*`    | Cualquier ruta/método no definido (catch-all)  | `404`                 |
+Referencia completa de los 12 endpoints reales del proyecto: 2 del controller general
+(`src/controllers/general.controller.ts`), 5 de `/turnos`
+(`src/routes/turnos.routes.ts` + `src/controllers/turnos.controller.ts`) y 5 de `/medicos`
+(`src/routes/medicos.routes.ts` + `src/controllers/medicos.controller.ts`).
 
-## Endpoints de `/turnos`
+`especialidad` es siempre uno de estos 4 valores exactos (enum cerrado, ver
+`src/schemas/turno.schema.ts`): `Clínica médica`, `Pediatría`, `Odontología`, `Nutrición`.
 
-| Método   | Ruta          | Descripción                   | Códigos de estado    |
-| -------- | ------------- | ------------------------------- | ----------------------- |
-| `GET`    | `/turnos`     | Lista turnos (admite filtros)   | `200`                    |
-| `GET`    | `/turnos/:id` | Obtiene un turno por ID         | `200`, `400`, `404`      |
-| `POST`   | `/turnos`     | Crea un nuevo turno             | `201`, `400`             |
-| `PUT`    | `/turnos/:id` | Actualiza un turno existente    | `200`, `400`, `404`      |
-| `DELETE` | `/turnos/:id` | Elimina un turno (sin body)     | `204`, `400`, `404`      |
+En las tablas de códigos de estado, `500` corresponde siempre al mismo caso: un error
+verdaderamente inesperado que escapa al `try/catch` propio del controller (por ejemplo, una
+falla al serializar la respuesta) y termina en el `errorHandler` centralizado
+(`src/middleware/errorHandler.ts`), con `code: "INTERNAL_ERROR"`.
 
-`especialidad` debe ser uno de estos 4 valores exactos: `Clínica médica`, `Pediatría`,
-`Odontología`, `Nutrición`. `fecha` en formato `YYYY-MM-DD` y `hora` en formato `HH:mm`.
+### Endpoint general
 
-### Filtros de `GET /turnos`
+#### `GET /`
 
-Se resuelven en la capa de servicios (`src/services/turnos.service.ts`), sin agregar
-endpoints nuevos:
+Mensaje de bienvenida de la API, útil para chequear que el servidor está levantado.
 
-- `?especialidad=Pediatría` — turnos de esa especialidad.
-- `?fecha=2026-08-15` — turnos en esa fecha.
-- `?medicoId=2` — turnos asignados a ese médico.
+- **Path params:** ninguno.
+- **Query params:** ninguno.
+- **Body:** no aplica.
 
-Los filtros se pueden combinar, por ejemplo:
+Respuesta `200`:
+```json
+{ "mensaje": "API de TurnosRed funcionando" }
+```
+
+| Código | Cuándo ocurre |
+| ------ | --------------- |
+| `200`  | Siempre; este endpoint no tiene condiciones de error. |
+
+#### `* /*` (catch-all)
+
+Cualquier combinación de método + ruta que no matchee `/`, `/turnos*` ni `/medicos*`
+(registrado como el último `app.use()` de `src/index.ts`, antes del `errorHandler`).
+
+- **Path params:** cualquiera (no matchea ninguna ruta definida).
+- **Query params:** no aplica.
+- **Body:** no aplica.
+
+Respuesta `404` de ejemplo (`GET /no-existe`):
+```json
+{
+  "status": 404,
+  "message": "Ruta no encontrada: GET /no-existe",
+  "code": "ROUTE_NOT_FOUND",
+  "details": []
+}
+```
+
+| Código | Cuándo ocurre |
+| ------ | --------------- |
+| `404`  | Siempre; es el único código que devuelve este handler. |
+
+### Endpoints de `/turnos`
+
+#### `GET /turnos`
+
+Lista todos los turnos en memoria, opcionalmente filtrados.
+
+- **Path params:** ninguno.
+- **Query params** (todos opcionales, combinables entre sí):
+  - `especialidad` (string) — turnos de esa especialidad.
+  - `fecha` (string, `YYYY-MM-DD`) — turnos en esa fecha.
+  - `medicoId` (string numérica) — turnos asignados a ese médico; debe representar un entero.
+- **Body:** no aplica.
 
 ```
 GET /turnos?especialidad=Pediatría&fecha=2026-08-15
 GET /turnos?medicoId=2
 ```
 
-## Endpoints de `/medicos`
+| Código | Cuándo ocurre |
+| ------ | --------------- |
+| `200`  | Petición válida; devuelve el array de turnos (vacío si ningún turno matchea los filtros). |
+| `400`  | `medicoId` viene en la query pero no representa un número entero (`code: "INVALID_QUERY_PARAM"`). |
+| `500`  | Error inesperado no capturado por el `try/catch` del controller. |
 
-| Método   | Ruta           | Descripción                   | Códigos de estado    |
-| -------- | -------------- | ------------------------------- | ----------------------- |
-| `GET`    | `/medicos`     | Lista médicos (admite filtros)  | `200`                    |
-| `GET`    | `/medicos/:id` | Obtiene un médico por ID        | `200`, `400`, `404`      |
-| `POST`   | `/medicos`     | Crea un nuevo médico            | `201`, `400`             |
-| `PUT`    | `/medicos/:id` | Actualiza un médico existente   | `200`, `400`, `404`      |
-| `DELETE` | `/medicos/:id` | Elimina un médico (sin body)    | `204`, `400`, `404`      |
+#### `GET /turnos/:id`
 
-Body: `nombre` (string), `especialidad` (mismo enum cerrado de 4 valores que turnos),
-`matricula` (string) y `disponible` (boolean).
+Obtiene un turno puntual por ID.
 
-### Filtros de `GET /medicos`
+- **Path params:** `id` (entero) — id del turno.
+- **Query params:** ninguno.
+- **Body:** no aplica.
 
-Se resuelven en la capa de servicios (`src/services/medicos.service.ts`):
+| Código | Cuándo ocurre |
+| ------ | --------------- |
+| `200`  | Existe un turno con ese `id`; lo devuelve. |
+| `400`  | `id` no es un número entero (`code: "INVALID_ID"`). |
+| `404`  | No existe ningún turno con ese `id` (`code: "TURNO_NOT_FOUND"`). |
+| `500`  | Error inesperado no capturado por el `try/catch` del controller. |
 
-- `?especialidad=Odontología` — médicos de esa especialidad.
-- `?disponible=true` o `?disponible=false` — médicos según su disponibilidad.
+#### `POST /turnos`
+
+Crea un nuevo turno. El body pasa primero por `validateBody(turnoBodySchema)`
+(`src/schemas/turno.schema.ts`) antes de llegar al controller.
+
+- **Path params:** ninguno.
+- **Query params:** ninguno.
+- **Body** (JSON, campo entre paréntesis indica si es obligatorio u opcional según el schema):
+```json
+{
+  "paciente": "Marcos Peña",
+  "documento": "38112233",
+  "especialidad": "Pediatría",
+  "fecha": "2026-08-15",
+  "hora": "10:30",
+  "confirmado": false,
+  "observaciones": "Control de rutina",
+  "medicoId": 2
+}
+```
+  - `paciente` (obligatorio, string no vacío)
+  - `documento` (obligatorio, string no vacío)
+  - `especialidad` (obligatorio, uno de los 4 valores del enum)
+  - `fecha` (obligatorio, `YYYY-MM-DD`)
+  - `hora` (obligatorio, `HH:mm`)
+  - `confirmado` (opcional, boolean, default `false`)
+  - `observaciones` (opcional, string)
+  - `medicoId` (opcional, entero positivo)
+
+| Código | Cuándo ocurre |
+| ------ | --------------- |
+| `201`  | Turno creado; devuelve el turno con el `id` asignado por el service. |
+| `400`  | El body no matchea `turnoBodySchema` — falta un campo obligatorio, `especialidad` no es uno de los 4 valores, `fecha`/`hora` no cumplen el formato, `medicoId` no es un entero positivo, etc. (`code: "VALIDATION_ERROR"`, `details` trae los `issues` de Zod con el campo exacto). También cubre, ya dentro del controller, el chequeo redundante de `paciente`/`documento`/`especialidad`/`fecha`/`hora` faltantes (`code: "MISSING_FIELDS"`), inalcanzable en la práctica porque Zod ya los exige antes. |
+| `500`  | Error inesperado no capturado por el `try/catch` del controller. |
+
+#### `PUT /turnos/:id`
+
+Actualiza parcialmente un turno existente. El body pasa por
+`validateBody(turnoBodyActualizacionSchema)`, la versión `.partial()` del schema de POST (todos
+los campos opcionales, pero si vienen deben cumplir el mismo formato).
+
+- **Path params:** `id` (entero) — id del turno a actualizar.
+- **Query params:** ninguno.
+- **Body** (JSON, cualquier subconjunto de los campos de `POST /turnos`), por ejemplo:
+```json
+{
+  "hora": "11:00",
+  "confirmado": true,
+  "medicoId": 3
+}
+```
+
+| Código | Cuándo ocurre |
+| ------ | --------------- |
+| `200`  | Turno actualizado; devuelve el turno con los cambios aplicados. |
+| `400`  | El body no matchea `turnoBodyActualizacionSchema` (`code: "VALIDATION_ERROR"`) o `id` no es un número entero (`code: "INVALID_ID"`). |
+| `404`  | No existe ningún turno con ese `id` (`code: "TURNO_NOT_FOUND"`). |
+| `500`  | Error inesperado no capturado por el `try/catch` del controller. |
+
+#### `DELETE /turnos/:id`
+
+Elimina un turno existente. No devuelve body.
+
+- **Path params:** `id` (entero) — id del turno a eliminar.
+- **Query params:** ninguno.
+- **Body:** no aplica.
+
+| Código | Cuándo ocurre |
+| ------ | --------------- |
+| `204`  | Turno eliminado; respuesta sin body. |
+| `400`  | `id` no es un número entero (`code: "INVALID_ID"`). |
+| `404`  | No existe ningún turno con ese `id` (`code: "TURNO_NOT_FOUND"`). |
+| `500`  | Error inesperado no capturado por el `try/catch` del controller. |
+
+### Endpoints de `/medicos`
+
+#### `GET /medicos`
+
+Lista todos los médicos en memoria, opcionalmente filtrados.
+
+- **Path params:** ninguno.
+- **Query params** (todos opcionales, combinables entre sí):
+  - `especialidad` (string) — médicos de esa especialidad.
+  - `disponible` (string) — debe ser exactamente `"true"` o `"false"`.
+- **Body:** no aplica.
 
 ```
 GET /medicos?especialidad=Odontología
@@ -237,7 +372,88 @@ GET /medicos?disponible=true
 GET /medicos?especialidad=Nutrición&disponible=true
 ```
 
-Cualquier error inesperado del servidor devuelve `500`.
+| Código | Cuándo ocurre |
+| ------ | --------------- |
+| `200`  | Petición válida; devuelve el array de médicos (vacío si ninguno matchea los filtros). |
+| `400`  | `disponible` viene en la query pero no es `"true"` ni `"false"` (`code: "INVALID_QUERY_PARAM"`). |
+| `500`  | Error inesperado no capturado por el `try/catch` del controller. |
+
+#### `GET /medicos/:id`
+
+Obtiene un médico puntual por ID.
+
+- **Path params:** `id` (entero) — id del médico.
+- **Query params:** ninguno.
+- **Body:** no aplica.
+
+| Código | Cuándo ocurre |
+| ------ | --------------- |
+| `200`  | Existe un médico con ese `id`; lo devuelve. |
+| `400`  | `id` no es un número entero (`code: "INVALID_ID"`). |
+| `404`  | No existe ningún médico con ese `id` (`code: "MEDICO_NOT_FOUND"`). |
+| `500`  | Error inesperado no capturado por el `try/catch` del controller. |
+
+#### `POST /medicos`
+
+Crea un nuevo médico. El body pasa primero por `validateBody(medicoBodySchema)`
+(`src/schemas/medico.schema.ts`) antes de llegar al controller.
+
+- **Path params:** ninguno.
+- **Query params:** ninguno.
+- **Body** (JSON, todos los campos son obligatorios en este schema):
+```json
+{
+  "nombre": "Dra. Ana Gómez",
+  "especialidad": "Odontología",
+  "matricula": "MP12345",
+  "disponible": true
+}
+```
+  - `nombre` (obligatorio, string no vacío)
+  - `especialidad` (obligatorio, uno de los 4 valores del enum, mismo `especialidadSchema` que turnos)
+  - `matricula` (obligatorio, string no vacío)
+  - `disponible` (obligatorio, boolean)
+
+| Código | Cuándo ocurre |
+| ------ | --------------- |
+| `201`  | Médico creado; devuelve el médico con el `id` asignado por el service. |
+| `400`  | El body no matchea `medicoBodySchema` — falta un campo, `especialidad` no es uno de los 4 valores, `disponible` no es boolean, etc. (`code: "VALIDATION_ERROR"`). También cubre, ya dentro del controller, el chequeo redundante de `nombre`/`especialidad`/`matricula` faltantes (`code: "MISSING_FIELDS"`), inalcanzable en la práctica porque Zod ya los exige antes. |
+| `500`  | Error inesperado no capturado por el `try/catch` del controller. |
+
+#### `PUT /medicos/:id`
+
+Actualiza parcialmente un médico existente. El body pasa por
+`validateBody(medicoBodyActualizacionSchema)`, la versión `.partial()` del schema de POST (todos
+los campos opcionales, pero si vienen deben cumplir el mismo formato).
+
+- **Path params:** `id` (entero) — id del médico a actualizar.
+- **Query params:** ninguno.
+- **Body** (JSON, cualquier subconjunto de los campos de `POST /medicos`), por ejemplo:
+```json
+{ "disponible": false }
+```
+
+| Código | Cuándo ocurre |
+| ------ | --------------- |
+| `200`  | Médico actualizado; devuelve el médico con los cambios aplicados. |
+| `400`  | El body no matchea `medicoBodyActualizacionSchema` (`code: "VALIDATION_ERROR"`) o `id` no es un número entero (`code: "INVALID_ID"`). |
+| `404`  | No existe ningún médico con ese `id` (`code: "MEDICO_NOT_FOUND"`). |
+| `500`  | Error inesperado no capturado por el `try/catch` del controller. |
+
+#### `DELETE /medicos/:id`
+
+Elimina un médico existente. No devuelve body.
+
+- **Path params:** `id` (entero) — id del médico a eliminar.
+- **Query params:** ninguno.
+- **Body:** no aplica.
+
+| Código | Cuándo ocurre |
+| ------ | --------------- |
+| `204`  | Médico eliminado; respuesta sin body. |
+| `400`  | `id` no es un número entero (`code: "INVALID_ID"`). |
+| `404`  | No existe ningún médico con ese `id` (`code: "MEDICO_NOT_FOUND"`). |
+| `500`  | Error inesperado no capturado por el `try/catch` del controller. |
 
 ## Eventos en tiempo real
 
